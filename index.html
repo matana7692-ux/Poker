@@ -77,7 +77,9 @@ button{cursor:pointer}
 .status{font-size:13px;color:#d9e6df;text-align:center;max-width:70%;min-height:18px}
 
 .seat{position:absolute;transform:translate(-50%,-50%);width:96px;display:flex;flex-direction:column;align-items:center;gap:2px;z-index:2}
-.seat .hole{display:flex;gap:2px;direction:ltr;height:52px;align-items:flex-end;margin-bottom:-12px;z-index:1}
+.seat .hole .card + .card{margin-left:-12px}
+.seat .hole .card{box-shadow:-2px 0 4px #0006}
+.seat .hole{display:flex;gap:0;direction:ltr;height:52px;align-items:flex-end;margin-bottom:-12px;z-index:1}
 .plate{position:relative;width:100%;background:var(--room);border:1px solid var(--line);border-radius:10px;padding:4px 6px 5px;text-align:center;z-index:2;cursor:pointer}
 .plate .nm{font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .plate .st{font-family:var(--f-num);font-size:13px;color:var(--brass)}
@@ -189,6 +191,15 @@ table.tbl td.wrap{white-space:normal;min-width:120px}
 .tmeta{font-size:14px;color:var(--muted)}
 .dotlive{color:var(--ok);font-weight:600}
 .dotlive::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ok);margin-inline-end:5px}
+.ctrl{display:flex;gap:8px;flex-wrap:wrap;align-items:center;border-top:1px solid var(--line);padding-top:10px}
+.ctrl:first-child{border-top:0;padding-top:0}
+.cbtn{border:1px solid var(--line);background:transparent;border-radius:999px;padding:7px 14px;font-size:14px;font-weight:600;color:var(--ink)}
+.cbtn.on{border-color:var(--brass);color:var(--brass)}
+.cbtn.warn{border-color:var(--danger);color:var(--danger)}
+.sheet.setup{place-items:start center;overflow-y:auto}
+.sheet .box.wide{width:min(560px,100%);max-height:none;margin-block:8px}
+.sheet .box h3{font-size:14px;margin:6px 0 0;color:var(--muted)}
+.sticky-actions{position:sticky;bottom:-18px;background:var(--room-2);padding-block:10px}
 .practice{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--room-2);border:1px solid var(--brass);border-radius:14px;padding:12px 14px}
 .practice > div{flex:1;min-width:180px}
 .newt{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:14px}
@@ -1157,12 +1168,12 @@ function dockHtml(){
   const me = mySeat();
   if (!LOCAL && !myId) return `<div class="hint">צפייה בלבד. כדי לשבת לשולחן צריך להתחבר לחשבון.</div>`;
   if (!LOCAL && !canWrite) return `<div class="hint">צפייה בלבד. בעל השולחן צריך להזמין אותך במייל כעורך כדי שתוכל לשבת.</div>`;
-  if (LOCAL) return localDock();
+  if (LOCAL) return localDock() + controlBar();
   if (me < 0){
     const pend = S.requests.find(r => r.id === myId);
-    return pend ? `<div class="hint">הבקשה שלך לשבת בכיסא ${pend.seat+1} ממתינה לאישור המארח.</div>` : `<div class="hint">בחר כיסא פנוי בשולחן ("שב") כדי להצטרף. לחיצה על שחקן מציגה את הסטטיסטיקה שלו.</div>`;
+    return (pend ? `<div class="hint">הבקשה שלך לשבת בכיסא ${pend.seat+1} ממתינה לאישור המארח.</div>` : `<div class="hint">בחר כיסא פנוי בשולחן ("שב") כדי להצטרף. לחיצה על שחקן מציגה את הסטטיסטיקה שלו.</div>`) + controlBar();
   }
-  return playerDock(me);
+  return playerDock(me) + controlBar();
 }
 function strengthHtml(i, cards){
   const h = S.hand; const p = h.P[i];
@@ -1189,6 +1200,27 @@ function cardsBlock(i, cards, pick, seatAttr=''){
     return `<div class="pickcol" data-eq="${esc(key)}"><button class="card lg s-${c[1]}" data-discard="${k}" ${seatAttr} aria-label="זרוק את ${RN(RV(c[0]))}${SUIT[c[1]]}"><b>${RN(RV(c[0]))}</b><i>${SUIT[c[1]]}</i></button><small>בלעדיו: <b class="num eqv">${v}</b></small></div>`;
   }).join('')}</div>`;
 }
+// Start/next for the host, then pause, away and leave: always on screen, never inside the menu.
+function controlBar(){
+  const me = mySeat(); const s = me >= 0 ? S.seats[me] : null; const h = S.hand;
+  const idle = !h || h.street === 'done';
+  const btns = [];
+  if (isHost()){
+    if (!S.running) btns.push(`<button class="btn primary" data-host="start" ${readySeats(S).length < 2 ? 'disabled' : ''}>התחל משחק</button>`);
+    else {
+      if (idle && (!st().autoNext || S.paused) && readySeats(S).length >= 2) btns.push(`<button class="btn primary" data-host="next">יד הבאה</button>`);
+      btns.push(`<button class="cbtn ${S.paused ? 'on' : ''}" data-host="pause">${S.paused ? '▶ המשך' : '❚❚ השהה'}</button>`);
+    }
+  }
+  if (s){
+    btns.push(`<button class="cbtn ${s.sitOut ? 'on' : ''}" data-act="away">${s.sitOut ? 'חזרתי' : 'לא ליד השולחן'}</button>`);
+    btns.push(s.leave ? `<button class="cbtn" data-act="leave">בטל עזיבה</button>`
+      : `<button class="cbtn ${confirmLeave ? 'warn' : ''}" data-act="leave">${confirmLeave ? 'לחץ שוב לאישור' : 'קום מהשולחן'}</button>`);
+  }
+  if (isHost() && !S.running && readySeats(S).length < 2) btns.push(`<span class="hint">צריך לפחות שני שחקנים כדי להתחיל</span>`);
+  return btns.length ? `<div class="ctrl">${btns.join('')}</div>` : '';
+}
+let confirmLeave = false, confirmLeaveT = null;
 function playerDock(i){
   const h = S.hand, s = S.seats[i], p = h && h.P[i];
   let html = '';
@@ -1221,9 +1253,6 @@ function playerDock(i){
     html += `<div class="dock-row">${cards ? `<div class="mycards">${cards.map(c => card(c,'lg dim')).join('')}</div>` : ''}<span class="hint">קיפלת ביד הזו</span></div>`;
   } else {
     html += `<div class="hint">${s.stack <= 0 && !(s.add>0) ? 'נגמרו לך הצ׳יפים. אפשר להיכנס שוב.' : 'תשתתף ביד הבאה.'}</div>`;
-  }
-  if (isHost() && (!h || h.street === 'done') && readySeats(S).length >= 2 && !(S.running && st().autoNext && !S.paused)){
-    html += `<div class="dock-row"><button class="btn primary" data-host="next">יד הבאה</button>${!S.running ? '<button class="btn small ghost" data-host="start">חלוקה אוטומטית</button>' : ''}</div>`;
   }
   if (s.stack <= 0 && !(s.add > 0) && !(p && h.street !== 'done')) html += `<div class="dock-row"><button class="btn primary" data-menu>כניסה חוזרת</button></div>`;
   return html;
@@ -1278,10 +1307,9 @@ function localDock(){
   } else if (h && h.street !== 'done' && botToMove(S) != null){
     html += `<div class="hint">${esc(nm(S, botToMove(S)))} חושב…</div>`;
   } else if (h && h.street === 'done'){
-    html += `<div class="dock-row"><span class="hint">היד הסתיימה.</span>${S.running && !S.paused && st().autoNext ? '' : `<button class="btn primary" data-host="next">יד הבאה</button>`}</div>`;
+    html += `<div class="hint">היד הסתיימה.</div>`;
   } else {
     html += `<div class="hint">מצב מכשיר אחד: מוסיפים שחקנים בכיסאות הפנויים ומעבירים את הטלפון בין השחקנים.</div>`;
-    if (readySeats(S).length >= 2 && !S.running) html += `<div><button class="btn primary" data-host="start">התחל משחק</button></div>`;
   }
   return html;
 }
@@ -1351,9 +1379,7 @@ function menuHtml(unread, reqs){
     </nav>
     ${s ? `<div class="mme">
       <div class="mtitle">הכיסא שלי · <span class="num">${s.stack}</span> צ׳יפים${s.add ? ` (+${s.add} ביד הבאה)` : ''}</div>
-      <label class="chk"><input type="checkbox" id="sitout" ${s.sitOut ? 'checked' : ''}> הפסקה (לא לקבל קלפים)</label>
       ${req ? `<div class="hint">בקשת כניסה של ${req.amount} ממתינה למארח</div>` : `<div class="row"><input type="number" id="addamt" min="1" step="1" value="${st().startStack}" aria-label="כמות צ׳יפים" style="width:110px"><button class="btn small" data-act="add">${s.stack <= 0 ? 'כניסה חוזרת' : 'הוסף צ׳יפים'}</button></div>`}
-      <button class="btn small ghost" data-act="leave">${s.leave ? 'בטל עזיבה' : 'קום מהשולחן'}</button>
     </div>` : ''}
   </div>`;
 }
@@ -1382,6 +1408,46 @@ function guestPanel(){
     ${s.mixOn && s.base !== 'omaha' ? `<div>אומהה אוטומטי: ${s.mixCount} ${s.mixUnit==='orbits'?'סיבובים':'ידיים'} כל ${s.mixEvery} ${s.mixUnit==='orbits'?'סיבובים':'ידיים'} (${s.omahaLimit==='pl'?'פוט לימיט':'נו לימיט'})</div>` : ''}
     ${s.base === 'pineapple' ? `<div>פיינאפל: זורקים קלף ${s.pineWhen==='pre' ? 'מיד אחרי החלוקה' : 'אחרי סיבוב ההימורים, לפני הפלופ'}</div>` : ''}
     ${(isOwner || !S.seats.some(x => x && x.id === S.hostId)) && myId ? `<button class="btn small" data-host="claim">קח את האירוח</button><div class="note">אפשר כשהמארח לא יושב בשולחן. מי שמארח גם מחלק את הקלפים.</div>` : ''}`;
+}
+function settingsFields(s, p){
+  return `
+    <h3>משחק</h3>
+    <div class="grid2">
+      <label class="field">משחק בסיס<select id="${p}Base">
+        <option value="holdem" ${s.base==='holdem'?'selected':''}>טקסס הולדם (נו לימיט)</option>
+        <option value="pineapple" ${s.base==='pineapple'?'selected':''}>פיינאפל (3 קלפים, זורקים 1)</option>
+        <option value="omaha" ${s.base==='omaha'?'selected':''}>אומהה בלבד</option></select></label>
+      <label class="field">פיינאפל: מתי זורקים<select id="${p}Pine">
+        <option value="pre" ${s.pineWhen==='pre'?'selected':''}>מיד אחרי החלוקה</option>
+        <option value="post" ${s.pineWhen==='post'?'selected':''}>אחרי ההימורים, לפני הפלופ</option></select></label>
+      <label class="field">אומהה<select id="${p}OL"><option value="pl" ${s.omahaLimit==='pl'?'selected':''}>פוט לימיט</option><option value="nl" ${s.omahaLimit==='nl'?'selected':''}>נו לימיט</option></select></label>
+    </div>
+    <h3>אומהה אוטומטי</h3>
+    <label class="chk"><input type="checkbox" id="${p}Mix" ${s.mixOn?'checked':''}> לשלב אומהה באופן קבוע</label>
+    <div class="grid2">
+      <label class="field">כל כמה<input type="number" id="${p}Every" min="1" value="${s.mixEvery}"></label>
+      <label class="field">יחידה<select id="${p}Unit"><option value="hands" ${s.mixUnit==='hands'?'selected':''}>ידיים</option><option value="orbits" ${s.mixUnit==='orbits'?'selected':''}>סיבובי דילר מלאים</option></select></label>
+      <label class="field">כמה אומהה בכל פעם<input type="number" id="${p}Count" min="1" value="${s.mixCount}"></label>
+    </div>
+    <div class="note">לדוגמה: כל 5 ידיים, יד אחת של אומהה. הספירה מתחילה מחדש כששומרים.</div>
+    <h3>זמן תגובה</h3>
+    <div class="grid2">
+      <label class="field">שניות לכל תור (0 = בלי שעון)<input type="number" id="${p}Timer" min="0" value="${s.timer}"></label>
+      <label class="field">בנק זמן לכל שחקן (שניות)<input type="number" id="${p}Bank" min="0" value="${s.timeBank}"></label>
+    </div>
+    ${p === 's' ? `<div class="row"><button class="btn small" data-host="refill">מלא את בנק הזמן לכולם</button></div>` : ''}
+    <div class="note">כשהזמן נגמר: צ׳ק אם אפשר, אחרת קיפול. שחקן שלא מגיב פעמיים ברצף עובר להפסקה. בנק הזמן מוסיף עד 30 שניות בכל לחיצה.</div>
+    <h3>בליינדים</h3>
+    <div class="grid2">
+      <label class="field">בליינד קטן<input type="number" id="${p}SB" min="1" value="${s.sb}"></label>
+      <label class="field">בליינד גדול<input type="number" id="${p}BB" min="1" value="${s.bb}"></label>
+      <label class="field">אנטה<input type="number" id="${p}Ante" min="0" value="${s.ante}"></label>
+      <label class="field">ערימת פתיחה<input type="number" id="${p}Stack" min="1" value="${s.startStack}"></label>
+    </div>
+    <label class="chk"><input type="checkbox" id="${p}Rabbit" ${s.rabbit?'checked':''}> לאפשר לראות את הקלפים שלא נפתחו כשכולם פרשו</label>
+    <label class="chk"><input type="checkbox" id="${p}Appr" ${s.approval?'checked':''}> מארח מאשר כל הצטרפות וכניסה חוזרת</label>
+    <label class="chk"><input type="checkbox" id="${p}Auto" ${s.autoNext?'checked':''}> לחלק יד חדשה אוטומטית</label>
+  `;
 }
 function hostPanel(){
   const s = st();
@@ -1412,42 +1478,7 @@ function hostPanel(){
     <div class="note">הבוט מתיישב בכיסא הפנוי הראשון עם ערימת הפתיחה. הוא רואה רק את הקלפים שלו, ונכנס מחדש לבד כשנגמרים לו הצ׳יפים. מסירים בוט עם "הוצא".</div>
     <h3>שחקנים</h3><div class="plist">${players || '<div class="hint">אין שחקנים עדיין</div>'}</div>
     <div class="note">שינוי צ׳יפים נכנס לתוקף ביד הבאה ונרשם בכניסות.</div>
-    <h3>משחק</h3>
-    <div class="grid2">
-      <label class="field">משחק בסיס<select id="sBase">
-        <option value="holdem" ${s.base==='holdem'?'selected':''}>טקסס הולדם (נו לימיט)</option>
-        <option value="pineapple" ${s.base==='pineapple'?'selected':''}>פיינאפל (3 קלפים, זורקים 1)</option>
-        <option value="omaha" ${s.base==='omaha'?'selected':''}>אומהה בלבד</option></select></label>
-      <label class="field">פיינאפל: מתי זורקים<select id="sPine">
-        <option value="pre" ${s.pineWhen==='pre'?'selected':''}>מיד אחרי החלוקה</option>
-        <option value="post" ${s.pineWhen==='post'?'selected':''}>אחרי ההימורים, לפני הפלופ</option></select></label>
-      <label class="field">אומהה<select id="sOL"><option value="pl" ${s.omahaLimit==='pl'?'selected':''}>פוט לימיט</option><option value="nl" ${s.omahaLimit==='nl'?'selected':''}>נו לימיט</option></select></label>
-    </div>
-    <h3>אומהה אוטומטי</h3>
-    <label class="chk"><input type="checkbox" id="sMix" ${s.mixOn?'checked':''}> לשלב אומהה באופן קבוע</label>
-    <div class="grid2">
-      <label class="field">כל כמה<input type="number" id="sEvery" min="1" value="${s.mixEvery}"></label>
-      <label class="field">יחידה<select id="sUnit"><option value="hands" ${s.mixUnit==='hands'?'selected':''}>ידיים</option><option value="orbits" ${s.mixUnit==='orbits'?'selected':''}>סיבובי דילר מלאים</option></select></label>
-      <label class="field">כמה אומהה בכל פעם<input type="number" id="sCount" min="1" value="${s.mixCount}"></label>
-    </div>
-    <div class="note">לדוגמה: כל 5 ידיים, יד אחת של אומהה. הספירה מתחילה מחדש כששומרים.</div>
-    <h3>זמן תגובה</h3>
-    <div class="grid2">
-      <label class="field">שניות לכל תור (0 = בלי שעון)<input type="number" id="sTimer" min="0" value="${s.timer}"></label>
-      <label class="field">בנק זמן לכל שחקן (שניות)<input type="number" id="sBank" min="0" value="${s.timeBank}"></label>
-    </div>
-    <div class="row"><button class="btn small" data-host="refill">מלא את בנק הזמן לכולם</button></div>
-    <div class="note">כשהזמן נגמר: צ׳ק אם אפשר, אחרת קיפול. שחקן שלא מגיב פעמיים ברצף עובר להפסקה. בנק הזמן מוסיף עד 30 שניות בכל לחיצה.</div>
-    <h3>בליינדים</h3>
-    <div class="grid2">
-      <label class="field">בליינד קטן<input type="number" id="sSB" min="1" value="${s.sb}"></label>
-      <label class="field">בליינד גדול<input type="number" id="sBB" min="1" value="${s.bb}"></label>
-      <label class="field">אנטה<input type="number" id="sAnte" min="0" value="${s.ante}"></label>
-      <label class="field">ערימת פתיחה<input type="number" id="sStack" min="1" value="${s.startStack}"></label>
-    </div>
-    <label class="chk"><input type="checkbox" id="sRabbit" ${s.rabbit?'checked':''}> לאפשר לראות את הקלפים שלא נפתחו כשכולם פרשו</label>
-    <label class="chk"><input type="checkbox" id="sAppr" ${s.approval?'checked':''}> מארח מאשר כל הצטרפות וכניסה חוזרת</label>
-    <label class="chk"><input type="checkbox" id="sAuto" ${s.autoNext?'checked':''}> לחלק יד חדשה אוטומטית</label>
+    ${settingsFields(s, 's')}
     <div class="row"><button class="btn primary" data-host="save">שמור הגדרות</button><button class="btn small ghost" data-host="resetstats">אפס סטטיסטיקה</button></div>
     <div class="note">שינויים בבליינדים ובמשחק נכנסים לתוקף מהיד הבאה.</div>`;
 }
@@ -1627,7 +1658,15 @@ function doAct(a){
       addChips(T, i, amt); });
     return;
   }
+  if (a === 'away'){
+    mutate(T => { const x = T.seats[i]; if (!x) return false; x.sitOut = !x.sitOut; x.timeouts = 0; addLog(T, `${x.name} ${x.sitOut ? 'לא ליד השולחן' : 'חזר לשחק'}`); });
+    return;
+  }
+  if (a === 'leave' && !(S.seats[i] && S.seats[i].leave) && !confirmLeave){
+    confirmLeave = true; clearTimeout(confirmLeaveT); confirmLeaveT = setTimeout(() => { confirmLeave = false; render(); }, 4000); render(); return;
+  }
   if (a === 'leave'){
+    confirmLeave = false; clearTimeout(confirmLeaveT);
     mutate(T => { const s = T.seats[i]; if (!s) return false; const hh = T.hand;
       if (s.leave){ s.leave = false; return; }
       if (hh && hh.street !== 'done' && hh.P[i]){ s.leave = true; if (!hh.P[i].folded) foldOutOfTurn(T, KK(), i, Date.now()); }
@@ -1649,13 +1688,15 @@ function maybePreAction(){
   const no = h.no;
   mutate(T => (T.hand && T.hand.no === no && act(T, KK(), i, toCall > 0 ? 'fold' : 'check', 0, Date.now())) ? undefined : false);
 }
-function readSettings(){
-  const n = (id, d, min=0) => { const v = Math.floor(+$(id).value); return Number.isFinite(v) && v >= min ? v : d; };
-  const s = st();
-  return {sb:n('#sSB', s.sb, 1), bb:Math.max(n('#sBB', s.bb, 1), n('#sSB', s.sb, 1)), ante:n('#sAnte', s.ante), startStack:n('#sStack', s.startStack, 1),
-    base:$('#sBase').value, pineWhen:$('#sPine').value, omahaLimit:$('#sOL').value, mixOn:$('#sMix').checked,
-    mixEvery:n('#sEvery', s.mixEvery, 1), mixUnit:$('#sUnit').value, mixCount:n('#sCount', s.mixCount, 1),
-    timer:n('#sTimer', s.timer), timeBank:n('#sBank', s.timeBank), rabbit:$('#sRabbit').checked, approval:$('#sAppr').checked, autoNext:$('#sAuto').checked};
+function readSettings(p = 's', base = null){
+  const s = base || st();
+  const n = (id, d, min=0) => { const el = $('#' + p + id); const v = el ? Math.floor(+el.value) : NaN; return Number.isFinite(v) && v >= min ? v : d; };
+  const v = (id, d) => { const el = $('#' + p + id); return el ? el.value : d; };
+  const c = (id, d) => { const el = $('#' + p + id); return el ? el.checked : d; };
+  return {sb:n('SB', s.sb, 1), bb:Math.max(n('BB', s.bb, 1), n('SB', s.sb, 1)), ante:n('Ante', s.ante), startStack:n('Stack', s.startStack, 1),
+    base:v('Base', s.base), pineWhen:v('Pine', s.pineWhen), omahaLimit:v('OL', s.omahaLimit), mixOn:c('Mix', s.mixOn),
+    mixEvery:n('Every', s.mixEvery, 1), mixUnit:v('Unit', s.mixUnit), mixCount:n('Count', s.mixCount, 1),
+    timer:n('Timer', s.timer), timeBank:n('Bank', s.timeBank), rabbit:c('Rabbit', s.rabbit), approval:c('Appr', s.approval), autoNext:c('Auto', s.autoNext)};
 }
 async function dealerStart(T){
   if (!T || (T.hand && T.hand.street !== 'done')) return false;
@@ -1872,10 +1913,7 @@ function lobbyHtml(){
     <form class="newt" id="nameForm" style="border-top:0;padding-top:0"><label class="field">השם שלך<input type="text" id="myName" maxlength="18" value="${esc(myDefaultName)}" placeholder="איך יקראו לך בשולחן" required></label><button class="btn small">שמור</button></form>
     <p class="hint">בחרו שולחן או פתחו שולחן משלכם. מי שפותח שולחן הוא המארח והדילר שלו.</p>
     <div class="tlist">${cards || '<div class="hint">אין עדיין שולחנות פתוחים.</div>'}</div>
-    <div class="practice"><div><b>תרגול מול בוטים</b><div class="note">שולחן פרטי שלך עם 3 בוטים. אפשר להוסיף עוד בוטים ולשנות משחק בניהול השולחן.</div></div>
-      <select id="pLevel" aria-label="רמת הבוטים">${Object.entries(BOT_LEVELS).map(([k,v]) => `<option value="${k}" ${k === 'normal' ? 'selected' : ''}>${v}</option>`).join('')}</select>
-      <button class="btn primary" id="practice">שחק עכשיו</button></div>
-    <form class="newt" id="newTable"><label class="field">שם לשולחן חדש<input type="text" id="newName" maxlength="28" placeholder="למשל: השולחן של חמישי" required></label><button class="btn primary">פתח שולחן</button></form>
+    <div class="row"><button class="btn primary" data-setup="table">פתח שולחן חדש</button><button class="btn" data-setup="practice">תרגול מול בוטים</button></div>
     <div class="row"><a class="btn small" href="${waLink()}" target="_blank" rel="noopener">שלח בווצאפ</a><button class="btn small ghost" data-share>שתף קישור</button></div>
     <p class="note">כמארח, השאר את הדף פתוח בזמן המשחק: אתה מחלק את הקלפים. לחצו "הוספה למסך הבית" בתפריט הדפדפן כדי לקבל אייקון כמו אפליקציה.</p>
   </div>`;
@@ -1886,30 +1924,41 @@ function bindLobby(){
   const nf = $('#nameForm');
   if (nf) nf.onsubmit = e => { e.preventDefault(); const v = $('#myName').value.trim().slice(0,18); if (!v) return; myDefaultName = v; try { localStorage.setItem('pk_name', v); } catch(_){} toast('נשמר'); };
   const mn = $('#myName'); if (mn) mn.onchange = () => { const v = mn.value.trim().slice(0,18); if (v){ myDefaultName = v; try { localStorage.setItem('pk_name', v); } catch(_){} } };
-  const pb = $('#practice');
-  if (pb) pb.onclick = async () => {
+  document.querySelectorAll('[data-setup]').forEach(b => b.onclick = () => {
     const v = $('#myName').value.trim().slice(0,18);
     if (!v){ toast('קודם כתוב את השם שלך'); $('#myName').focus(); return; }
     myDefaultName = v; try { localStorage.setItem('pk_name', v); } catch(_){}
-    const level = $('#pLevel').value;
-    const id = Array.from({length:8}, () => 'abcdefghijkmnpqrstuvwxyz23456789'[rnd(32)]).join('');
-    const T = newTable(myId); T.name = `תרגול של ${v}`;
-    seatPlayer(T, 0, myId, v, T.settings.startStack, myPub);
-    addBot(T, 3, level); addBot(T, 5, level); addBot(T, 7, level);
-    T.running = true;
-    try { await db.doc('tables/' + id).set(clone(T)); openTable(id); }
-    catch(err){ toast(err && err.code === 'permission-denied' ? 'השרת חוסם. בדוק את כללי האבטחה ב-Firebase.' : 'השולחן לא נפתח, נסה שוב'); }
-  };
-  const f = $('#newTable');
-  if (f) f.onsubmit = async e => {
+    openSetup(b.dataset.setup === 'practice');
+  });
+}
+// New table: choose every setting before anyone sits down. Nothing is dealt until the host presses Start.
+function openSetup(practice){
+  const d = newTable(myId).settings;
+  $('#sheet').innerHTML = `<div class="sheet setup" id="setupSheet"><form class="box wide" id="setupForm">
+    <h2 style="margin:0;font-family:var(--f-display);font-weight:400">${practice ? 'תרגול מול בוטים' : 'שולחן חדש'}</h2>
+    <label class="field">שם השולחן<input type="text" id="nName" maxlength="28" required value="${esc(practice ? 'תרגול של ' + myDefaultName : '')}" placeholder="למשל: השולחן של חמישי"></label>
+    <h3>שחקנים</h3>
+    <label class="chk"><input type="checkbox" id="nSeatMe" ${practice ? 'checked' : ''}> להושיב אותי בשולחן עכשיו</label>
+    <div class="grid2">
+      <label class="field">בוטים<select id="nBots">${[0,1,2,3,4,5,6,7,8].map(k => `<option value="${k}" ${k === (practice ? 3 : 0) ? 'selected' : ''}>${k === 0 ? 'בלי בוטים' : k}</option>`).join('')}</select></label>
+      <label class="field">רמת הבוטים<select id="nBotLevel">${Object.entries(BOT_LEVELS).map(([k,v]) => `<option value="${k}" ${k === 'normal' ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+    </div>
+    ${settingsFields(d, 'n')}
+    <div class="row sticky-actions"><button class="btn primary">צור שולחן</button><button type="button" class="btn ghost" id="setupCancel">ביטול</button></div>
+    <div class="note">המשחק לא מתחיל מעצמו. כשכולם יושבים, לוחצים "התחל משחק".</div>
+  </form></div>`;
+  $('#setupCancel').onclick = () => $('#sheet').innerHTML = '';
+  $('#setupForm').onsubmit = async e => {
     e.preventDefault();
-    const v = $('#myName').value.trim().slice(0,18);
-    if (!v){ toast('קודם כתוב את השם שלך'); $('#myName').focus(); return; }
-    myDefaultName = v; try { localStorage.setItem('pk_name', v); } catch(_){}
-    const name = $('#newName').value.trim().slice(0, 28); if (!name) return;
-    const id = Array.from({length:8}, () => 'abcdefghijkmnpqrstuvwxyz23456789'[rnd(32)]).join('');
+    const name = $('#nName').value.trim().slice(0, 28); if (!name) return;
     const T = newTable(myId); T.name = name;
-    try { await db.doc('tables/' + id).set(clone(T)); openTable(id); }
+    T.settings = Object.assign({}, T.settings, readSettings('n', T.settings));
+    if ($('#nSeatMe').checked) seatPlayer(T, 0, myId, myDefaultName, T.settings.startStack, myPub);
+    const bots = +$('#nBots').value, level = $('#nBotLevel').value;
+    const order = [4, 2, 6, 3, 5, 7, 1, 8, 0];
+    for (let k = 0, added = 0; k < order.length && added < bots; k++){ if (!T.seats[order[k]]){ addBot(T, order[k], level); added++; } }
+    const id = Array.from({length:8}, () => 'abcdefghijkmnpqrstuvwxyz23456789'[rnd(32)]).join('');
+    try { await db.doc('tables/' + id).set(clone(T)); $('#sheet').innerHTML = ''; openTable(id); }
     catch(err){ toast(err && err.code === 'permission-denied' ? 'השרת חוסם. בדוק את כללי האבטחה ב-Firebase.' : 'השולחן לא נפתח, נסה שוב'); }
   };
 }
